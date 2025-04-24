@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: httpd-server-snapshot
+  namespace: poc-virt-idx
+spec:
+  schedule: '* * 31 12 *'
+  timeZone: Asia/Jakarta
+  concurrencyPolicy: Allow
+  suspend: false
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: vm-snapshot-service-account
+          containers:
+            - name: vm-snapshot
+              image: quay.io/openshift/origin-cli:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  #!/bin/bash
+                  VM_NAME="httpd-server"
+                  SNAPSHOT_NAME="snapshot-$(date +%Y%m%d%H%M%S)"
+                  echo "Creating snapshot for VM: $VM_NAME"
+                  oc annotate --overwrite vm $VM_NAME kubevirt.io/snapshot-rename-policy=retain || true
+                  oc create -f - <<EOF
+                  apiVersion: snapshot.kubevirt.io/v1alpha1
+                  kind: VirtualMachineSnapshot
+                  metadata:
+                    name: ${SNAPSHOT_NAME}
+                    namespace: poc-virt-idx
+                  spec:
+                    source:
+                      apiGroup: kubevirt.io
+                      kind: VirtualMachine
+                      name: ${VM_NAME}
+                  EOF
+              env:
+                - name: TZ
+                  value: Asia/Jakarta
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+          restartPolicy: OnFailure
