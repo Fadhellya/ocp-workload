@@ -1,8 +1,8 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: httpd-server-snapshot
-  namespace: poc-virt-idx
+  name: <cronjob-name>
+  namespace: <project-name>
 spec:
   schedule: '* * 31 12 *'
   timeZone: Asia/Jakarta
@@ -23,7 +23,7 @@ spec:
               args:
                 - |
                   #!/bin/bash
-                  VM_NAME="httpd-server"
+                  VM_NAME="<vm-name>"
                   SNAPSHOT_NAME="snapshot-$(date +%Y%m%d%H%M%S)"
                   echo "Creating snapshot for VM: $VM_NAME"
                   oc annotate --overwrite vm $VM_NAME kubevirt.io/snapshot-rename-policy=retain || true
@@ -32,7 +32,7 @@ spec:
                   kind: VirtualMachineSnapshot
                   metadata:
                     name: ${SNAPSHOT_NAME}
-                    namespace: poc-virt-idx
+                    namespace: <project-name>
                   spec:
                     source:
                       apiGroup: kubevirt.io
