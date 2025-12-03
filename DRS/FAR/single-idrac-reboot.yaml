@@ -1,0 +1,23 @@
+apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
+kind: FenceAgentsRemediationTemplate
+metadata:
+  name: far-idrac-template
+  namespace: openshift-workload-availability
+  annotations:
+    remediation.medik8s.io/multiple-templates-support: "true"
+    remediation.medik8s.io/template-rendering-mode: none
+spec:
+  template:
+    spec:
+      agent: fence_idrac
+      remediationStrategy: ResourceDeletion
+      retrycount: 5
+      retryinterval: 5s
+      sharedSecretName: fence-agents-credentials-shared
+      sharedparameters:
+        "--action": reboot
+        "--ip": "10.100.22.11"
+        "--lanplus": ""
+        "--password": "calvin"
+        "--username": "root"
+      timeout: 1m
