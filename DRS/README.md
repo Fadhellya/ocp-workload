@@ -1,1 +1,1 @@
-### Makesure IPMI Open Setting OVER LAN >> Enable
+Makesure IPMI Open Setting OVER LAN >> Enable
