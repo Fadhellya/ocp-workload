@@ -4,7 +4,7 @@ metadata:
   name: <cronjob-name>
   namespace: <project-name>
 spec:
-  schedule: '* * 31 12 *'
+  schedule: "* * 31 12 *"
   timeZone: Asia/Jakarta
   concurrencyPolicy: Allow
   suspend: false
@@ -15,6 +15,7 @@ spec:
       template:
         spec:
           serviceAccountName: vm-snapshot-service-account
+          restartPolicy: OnFailure
           containers:
             - name: vm-snapshot
               image: quay.io/openshift/origin-cli:latest
@@ -22,27 +23,56 @@ spec:
               command: ["/bin/bash", "-c"]
               args:
                 - |
-                  #!/bin/bash
+                  set -e
+
                   VM_NAME="<vm-name>"
+                  NAMESPACE="<project-name>"
                   SNAPSHOT_NAME="snapshot-$(date +%Y%m%d%H%M%S)"
-                  echo "Creating snapshot for VM: $VM_NAME"
-                  oc annotate --overwrite vm $VM_NAME kubevirt.io/snapshot-rename-policy=retain || true
+
+                  echo "Creating snapshot for VM: ${VM_NAME}"
+
+                  oc annotate --overwrite vm ${VM_NAME} \
+                    kubevirt.io/snapshot-rename-policy=retain || true
+
                   oc create -f - <<EOF
                   apiVersion: snapshot.kubevirt.io/v1alpha1
                   kind: VirtualMachineSnapshot
                   metadata:
                     name: ${SNAPSHOT_NAME}
-                    namespace: <project-name>
+                    namespace: ${NAMESPACE}
                   spec:
                     source:
                       apiGroup: kubevirt.io
                       kind: VirtualMachine
                       name: ${VM_NAME}
                   EOF
+
+                  echo "Snapshot ${SNAPSHOT_NAME} created"
+
+                  echo "Cleaning old snapshots (keep only 2 latest)..."
+
+                  SNAPSHOTS=$(oc get vmsnapshot -n ${NAMESPACE} \
+                    -o json | jq -r '
+                      .items[]
+                      | select(.spec.source.name=="'${VM_NAME}'")
+                      | "\(.metadata.creationTimestamp) \(.metadata.name)"
+                    ' | sort)
+
+                  SNAPSHOT_COUNT=$(echo "$SNAPSHOTS" | wc -l)
+
+                  if [ "$SNAPSHOT_COUNT" -le 2 ]; then
+                    echo "Snapshot count <= 2, no cleanup needed"
+                    exit 0
+                  fi
+
+                  SNAPSHOTS_TO_DELETE=$(echo "$SNAPSHOTS" | head -n $(($SNAPSHOT_COUNT - 2)) | awk '{print $2}')
+
+                  for SNAP in $SNAPSHOTS_TO_DELETE; do
+                    echo "Deleting snapshot: $SNAP"
+                    oc delete vmsnapshot $SNAP -n ${NAMESPACE}
+                  done
+
+                  echo "Cleanup completed"
               env:
                 - name: TZ
                   value: Asia/Jakarta
-              resources: {}
-              terminationMessagePath: /dev/termination-log
-              terminationMessagePolicy: File
-          restartPolicy: OnFailure
